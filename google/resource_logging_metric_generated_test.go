@@ -24,7 +24,7 @@ import (
 	"github.com/hashicorp/terraform/terraform"
 )
 
-func TestAccPubsubSubscription_pubsubSubscriptionPullExample(t *testing.T) {
+func TestAccLoggingMetric_loggingMetricBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
@@ -34,13 +34,13 @@ func TestAccPubsubSubscription_pubsubSubscriptionPullExample(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
 		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckPubsubSubscriptionDestroy,
+		CheckDestroy: testAccCheckLoggingMetricDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccPubsubSubscription_pubsubSubscriptionPullExample(context),
+				Config: testAccLoggingMetric_loggingMetricBasicExample(context),
 			},
 			{
-				ResourceName:      "google_pubsub_subscription.example",
+				ResourceName:      "google_logging_metric.logging_metric",
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
@@ -48,36 +48,36 @@ func TestAccPubsubSubscription_pubsubSubscriptionPullExample(t *testing.T) {
 	})
 }
 
-func testAccPubsubSubscription_pubsubSubscriptionPullExample(context map[string]interface{}) string {
+func testAccLoggingMetric_loggingMetricBasicExample(context map[string]interface{}) string {
 	return Nprintf(`
-resource "google_pubsub_topic" "example" {
-  name = "example-topic-%{random_suffix}"
-}
-
-resource "google_pubsub_subscription" "example" {
-  name  = "example-subscription-%{random_suffix}"
-  topic = "${google_pubsub_topic.example.name}"
-
-  labels = {
-    foo = "bar"
+resource "google_logging_metric" "logging_metric" {
+  name = "my-(custom)/metric-%{random_suffix}"
+  filter = "resource.type=gae_app AND severity>=ERROR"
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type = "DISTRIBUTION"
+    labels {
+        key = "mass"
+        value_type = "STRING"
+        description = "amount of matter"
+    }
   }
-
-  # 20 minutes
-  message_retention_duration = "1200s"
-  retain_acked_messages = true
-
-  ack_deadline_seconds = 20
-
-  expiration_policy {
-    ttl = "300000.5s"
+  value_extractor = "EXTRACT(jsonPayload.request)"
+  label_extractors = { "mass": "EXTRACT(jsonPayload.request)" }
+  bucket_options {
+    linear_buckets {
+      num_finite_buckets = 3
+      width = 1
+      offset = 1
+    }
   }
 }
 `, context)
 }
 
-func testAccCheckPubsubSubscriptionDestroy(s *terraform.State) error {
+func testAccCheckLoggingMetricDestroy(s *terraform.State) error {
 	for name, rs := range s.RootModule().Resources {
-		if rs.Type != "google_pubsub_subscription" {
+		if rs.Type != "google_logging_metric" {
 			continue
 		}
 		if strings.HasPrefix(name, "data.") {
@@ -86,14 +86,14 @@ func testAccCheckPubsubSubscriptionDestroy(s *terraform.State) error {
 
 		config := testAccProvider.Meta().(*Config)
 
-		url, err := replaceVarsForTest(rs, "https://pubsub.googleapis.com/v1/projects/{{project}}/subscriptions/{{name}}")
+		url, err := replaceVarsForTest(rs, "https://logging.googleapis.com/v2/projects/{{project}}/metrics/{{%name}}")
 		if err != nil {
 			return err
 		}
 
 		_, err = sendRequest(config, "GET", url, nil)
 		if err == nil {
-			return fmt.Errorf("PubsubSubscription still exists at %s", url)
+			return fmt.Errorf("LoggingMetric still exists at %s", url)
 		}
 	}
 
